@@ -1,5 +1,6 @@
 import re
 import sentry_sdk
+from sentry_sdk.attachments import Attachment
 import binascii
 import uuid
 import subprocess
@@ -357,7 +358,7 @@ class CoredumpHandler(RegexMatchingEventHandler):
 
 class CoredumpUploader(object):
     def __init__(
-        self, path_to_executable, sentry_dsn, gdb_path, elfutils_path, all_threads
+        self, path_to_executable, sentry_dsn, gdb_path, elfutils_path, all_threads, attach
     ):
         if not os.path.isfile(path_to_executable):
             error("Wrong path to executable")
@@ -377,6 +378,7 @@ class CoredumpUploader(object):
         self.gdb_path = gdb_path
         self.elfutils_path = elfutils_path
         self.all_threads = all_threads
+        self.attach = attach
 
     def execute_gdb(self, path_to_core, gdb_command):
         """creates a subprocess for gdb and returns the output from gdb"""
@@ -602,7 +604,24 @@ class CoredumpUploader(object):
         if thread_list:
             data["threads"] = {"values": thread_list}
 
-        event_id = sentry_sdk.capture_event(data)
+        attachments = [
+        ]
+
+        def is_sequence(arg):
+            return (not hasattr(arg, "strip") and
+                    hasattr(arg, "__getitem__") or
+                    hasattr(arg, "__iter__"))
+
+        if not is_sequence(self.attach):
+            print("attaching file: %s" % (self.attach))
+            attachments.append(Attachment(path=self.attach))
+        else:
+            for filepath in self.attach:
+                print("attaching file: %s" % (filepath))
+                attachments.append(Attachment(path=filepath))
+
+        event_id = sentry_sdk.capture_event(data, { "attachments": attachments })
+
         print("Core dump sent to sentry: %s" % (event_id))
 
 
@@ -614,8 +633,9 @@ class CoredumpUploader(object):
 @click.option(
     "--all-threads", is_flag=True, help="Sends the backtrace from all threads to sentry"
 )
+@click.option("--attach", multiple=True, required=False, help="Path to file to attach")
 @click.pass_context
-def cli(context, path_to_executable, sentry_dsn, gdb_path, elfutils_path, all_threads):
+def cli(context, path_to_executable, sentry_dsn, gdb_path, elfutils_path, all_threads, attach):
     """Sentry coredump uploader
 
     This utility can upload core dumps to sentry by stack walking them with the help
@@ -623,7 +643,7 @@ def cli(context, path_to_executable, sentry_dsn, gdb_path, elfutils_path, all_th
     """
     sentry_sdk.init(sentry_dsn, max_breadcrumbs=0)
     uploader = CoredumpUploader(
-        path_to_executable, sentry_dsn, gdb_path, elfutils_path, all_threads
+        path_to_executable, sentry_dsn, gdb_path, elfutils_path, all_threads, attach
     )
 
     context.ensure_object(dict)
