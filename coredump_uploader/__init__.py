@@ -618,9 +618,11 @@ class CoredumpUploader(object):
         else:
             for filepath in self.attach:
                 print("attaching file: %s" % (filepath))
-                attachments.append(Attachment(path=filepath))
+                attachments.append(Attachment(path=filepath,content_type="text/plain"))
 
-        event_id = sentry_sdk.capture_event(data, { "attachments": attachments })
+        event_id = sentry_sdk.capture_event(data, { "attachments": attachments }) \
+            if len(attachments) > 0 \
+            else sentry_sdk.capture_event(data)
 
         print("Core dump sent to sentry: %s" % (event_id))
 
