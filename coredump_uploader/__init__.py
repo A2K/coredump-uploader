@@ -358,7 +358,7 @@ class CoredumpHandler(RegexMatchingEventHandler):
 
 class CoredumpUploader(object):
     def __init__(
-        self, path_to_executable, sentry_dsn, gdb_path, elfutils_path, all_threads, attach
+        self, path_to_executable, sentry_dsn, gdb_path, elfutils_path, all_threads, attach, release
     ):
         if not os.path.isfile(path_to_executable):
             error("Wrong path to executable")
@@ -379,6 +379,7 @@ class CoredumpUploader(object):
         self.elfutils_path = elfutils_path
         self.all_threads = all_threads
         self.attach = attach
+        self.release = release
 
     def execute_gdb(self, path_to_core, gdb_command):
         """creates a subprocess for gdb and returns the output from gdb"""
@@ -604,8 +605,10 @@ class CoredumpUploader(object):
         if thread_list:
             data["threads"] = {"values": thread_list}
 
-        attachments = [
-        ]
+        if self.release:
+            data["release"] = self.release
+
+        attachments = [ ]
 
         def is_sequence(arg):
             return (not hasattr(arg, "strip") and
@@ -636,8 +639,9 @@ class CoredumpUploader(object):
     "--all-threads", is_flag=True, help="Sends the backtrace from all threads to sentry"
 )
 @click.option("--attach", multiple=True, required=False, help="Path to file to attach")
+@click.option("--release", required=False, help="Release name")
 @click.pass_context
-def cli(context, path_to_executable, sentry_dsn, gdb_path, elfutils_path, all_threads, attach):
+def cli(context, path_to_executable, sentry_dsn, gdb_path, elfutils_path, all_threads, attach, release):
     """Sentry coredump uploader
 
     This utility can upload core dumps to sentry by stack walking them with the help
@@ -645,7 +649,7 @@ def cli(context, path_to_executable, sentry_dsn, gdb_path, elfutils_path, all_th
     """
     sentry_sdk.init(sentry_dsn, max_breadcrumbs=0)
     uploader = CoredumpUploader(
-        path_to_executable, sentry_dsn, gdb_path, elfutils_path, all_threads, attach
+        path_to_executable, sentry_dsn, gdb_path, elfutils_path, all_threads, attach, release
     )
 
     context.ensure_object(dict)
