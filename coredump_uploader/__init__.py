@@ -447,19 +447,23 @@ class CoredumpUploader(object):
     def parse_asan_stacktrace(path):
         frames = []
         rx = re.compile(r'^.*#\d+\s+(0x[0-9a-fA-F]+)\s+in\s+.*$', re.UNICODE)
+        rx_package = re.compile(r'^.*#\d+\s+0x[0-9a-fA-F]+\s+in\s+.*\(([^+]+)\+0x[0-9a-fA-F]+\)$', re.UNICODE)
         with open(path, "r") as file:
             started = False
-            for line in file.readlines():
-                line = line.strip()
-                if line.startswith('#'):
-                    started = True
-                else:
-                    if started: break
-
-                match = rx.match(line)
+            while True:
+                line = file.readline()
+                if not line: break
+                match = rx.match(line.strip())
                 if match:
-                    frames.append(Frame(instruction_addr=match.group(1)))
+                    started = True
+                    package_match = rx_package.match(line.strip())
+                    if package_match:
+                        frames.append(Frame(instruction_addr=match.group(1), package=package_match.group(1)))
+                    else:
+                        frames.append(Frame(instruction_addr=match.group(1)))
+                elif started: break
         return frames
+
 
     def upload(self, path_to_core):
         """Uploads the event to sentry"""
@@ -572,10 +576,30 @@ class CoredumpUploader(object):
         if type_exception is None:
             type_exception = exit_signal
 
-        if self.attach:
-            frames = self.parse_asan_stacktrace(self.attach)
-            if frames:
+        def parse_asan(log):
+            frames = self.parse_asan_stacktrace(log)
+            if len(frames) > 0:
                 stacktrace.frames = frames
+
+        def is_sequence(arg):
+            return (not hasattr(arg, "strip") and
+                    hasattr(arg, "__getitem__") or
+                    hasattr(arg, "__iter__"))
+
+        attachments = []
+
+        if not is_sequence(self.attach):
+            print("attaching file: %s" % (self.attach))
+            if str(filepath).split('/')[-1].startswith('asan.log.'):
+                parse_asan(filepath)
+            else:
+                attachments.append(Attachment(path=filepath,content_type="text/plain",filename="Crash.ASan.txt"))
+        else:
+            for filepath in self.attach:
+                if str(filepath).split('/')[-1].startswith('asan.log.'):
+                    parse_asan(filepath)
+                else:
+                    attachments.append(Attachment(path=filepath,content_type="text/plain",filename="Crash.ASan.txt"))
 
         # Build the json for sentry
         sentry_sdk.integrations.modules.ModulesIntegration = None
@@ -630,7 +654,9 @@ class CoredumpUploader(object):
         if self.release:
             data["release"] = self.release
 
-        event_id = sentry_sdk.capture_event(data)
+        event_id = sentry_sdk.capture_event(data, { "attachments": attachments }) \
+            if len(attachments) > 0 \
+            else sentry_sdk.capture_event(data)
 
         print("Core dump sent to sentry: %s" % (event_id))
 
