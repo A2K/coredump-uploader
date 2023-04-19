@@ -444,7 +444,7 @@ class CoredumpUploader(object):
             message,
         )
 
-    def parse_asan_stacktrace(path):
+    def parse_asan_stacktrace(self, path):
         frames = []
         rx = re.compile(r'^.*#\d+\s+(0x[0-9a-fA-F]+)\s+in\s+.*$', re.UNICODE)
         rx_package = re.compile(r'^.*#\d+\s+0x[0-9a-fA-F]+\s+in\s+.*\(([^+]+)\+0x[0-9a-fA-F]+\)$', re.UNICODE)
