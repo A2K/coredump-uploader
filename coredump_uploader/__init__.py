@@ -590,16 +590,14 @@ class CoredumpUploader(object):
 
         if not is_sequence(self.attach):
             print("attaching file: %s" % (self.attach))
+            attachments.append(Attachment(path=filepath,content_type="text/plain",filename="Crash.ASan.txt"))
             if str(filepath).split('/')[-1].startswith('asan.log.'):
                 parse_asan(filepath)
-            else:
-                attachments.append(Attachment(path=filepath,content_type="text/plain",filename="Crash.ASan.txt"))
         else:
             for filepath in self.attach:
+                attachments.append(Attachment(path=filepath,content_type="text/plain",filename="Crash.ASan.txt"))
                 if str(filepath).split('/')[-1].startswith('asan.log.'):
                     parse_asan(filepath)
-                else:
-                    attachments.append(Attachment(path=filepath,content_type="text/plain",filename="Crash.ASan.txt"))
 
         # Build the json for sentry
         sentry_sdk.integrations.modules.ModulesIntegration = None
