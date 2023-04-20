@@ -446,13 +446,15 @@ class CoredumpUploader(object):
 
     def parse_asan_stacktrace(self, path):
         frames = []
-        rx = re.compile(r'^.*#\d+\s+(0x[0-9a-fA-F]+)\s+in\s+.*$', re.UNICODE)
-        rx_package = re.compile(r'^.*#\d+\s+0x[0-9a-fA-F]+\s+in\s+.*\(([^+]+)\+0x[0-9a-fA-F]+\)$', re.UNICODE)
+        rx = re.compile(r'^#\d+\s+(0x[0-9a-fA-F]+).*$')
+        rx_package = re.compile(r'^.*#\d+\s+0x[0-9a-fA-F]+\s+in\s+.*\(([^+]+)\+0x[0-9a-fA-F]+\)$')
         with open(path, "r") as file:
             started = False
             while True:
                 line = file.readline()
                 if not line: break
+                line = line.strip()
+                if len(line) == 0: continue
                 match = rx.match(line.strip())
                 if match:
                     started = True
@@ -466,6 +468,7 @@ class CoredumpUploader(object):
 
 
     def upload(self, path_to_core):
+
         """Uploads the event to sentry"""
         # Validate input Path
         if os.path.isfile(path_to_core) is not True:
@@ -576,28 +579,15 @@ class CoredumpUploader(object):
         if type_exception is None:
             type_exception = exit_signal
 
-        def parse_asan(log):
-            frames = self.parse_asan_stacktrace(log)
-            if len(frames) > 0:
-                stacktrace.frames = frames
-
-        def is_sequence(arg):
-            return (not hasattr(arg, "strip") and
-                    hasattr(arg, "__getitem__") or
-                    hasattr(arg, "__iter__"))
-
         attachments = []
 
-        if not is_sequence(self.attach):
-            print("attaching file: %s" % (self.attach))
-            attachments.append(Attachment(path=filepath,content_type="text/plain",filename="Crash.ASan.txt"))
-            if str(filepath).split('/')[-1].startswith('asan.log.'):
-                parse_asan(filepath)
-        else:
-            for filepath in self.attach:
-                attachments.append(Attachment(path=filepath,content_type="text/plain",filename="Crash.ASan.txt"))
-                if str(filepath).split('/')[-1].startswith('asan.log.'):
-                    parse_asan(filepath)
+        for attachment in self.attach:
+            filename = os.path.basename(os.path.normpath(str(attachment)))
+            if filename.startswith('asan.log.'):
+                stacktrace.frames = self.parse_asan_stacktrace(attachment)
+                attachments.append(Attachment(path=attachment,content_type="text/plain",filename="Crash.ASan.txt"))
+            else:
+                attachments.append(Attachment(path=attachment,content_type="text/plain",filename=filename))
 
         # Build the json for sentry
         sentry_sdk.integrations.modules.ModulesIntegration = None
