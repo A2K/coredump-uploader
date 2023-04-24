@@ -462,7 +462,7 @@ class CoredumpUploader(object):
                     if package_match:
                         frames.append(Frame(instruction_addr=match.group(1), package=package_match.group(1)))
                     else:
-                        frames.append(Frame(instruction_addr=match.group(1), in_app=True))
+                        frames.append(Frame(instruction_addr=match.group(1)))
                 elif started: break
         return frames
 
