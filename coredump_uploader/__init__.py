@@ -583,11 +583,7 @@ class CoredumpUploader(object):
 
         for attachment in self.attach:
             filename = os.path.basename(os.path.normpath(str(attachment)))
-            if filename.startswith('asan.log.'):
-                stacktrace.frames = self.parse_asan_stacktrace(attachment)
-                attachments.append(Attachment(path=attachment,content_type="text/plain",filename="Crash.ASan.txt"))
-            else:
-                attachments.append(Attachment(path=attachment,content_type="text/plain",filename=filename))
+            attachments.append(Attachment(path=attachment,content_type="text/plain",filename=filename))
 
         # Build the json for sentry
         sentry_sdk.integrations.modules.ModulesIntegration = None
